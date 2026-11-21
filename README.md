@@ -48,7 +48,7 @@ A table in the job summary: file, listed (yes or no), software, version and sour
 
 Your files never leave the runner. The CLI hashes each file there and sends only the SHA-256 hashes to the public Fileion API (`https://fileion.com/api/v1`), in one request for up to 100 files. No telemetry. With no key the API allows 60 requests a minute per IP; a free key allows 300. Shared GitHub runner addresses can hit the keyless limit, so add a key if you see a rate limit error (exit code 4).
 
-## Unsigned CLI, verified against SHA256SUMS
+## Unsigned CLI, verified against the SHA-256 values in action.yml
 
 The Fileion CLI is not code-signed yet. The action downloads the CLI binary for the runner from the pinned [v0.1.0 release](https://github.com/fileion/fileion-cli/releases/tag/v0.1.0) over HTTPS and compares its SHA-256 with the value for that file written in `action.yml`, copied from that release's `SHA256SUMS`. It stops the job if they differ, so a replaced release file is caught too. It runs no other downloaded code and uses no other actions.
 
