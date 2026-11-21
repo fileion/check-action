@@ -1,6 +1,8 @@
 name: Self-test
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -24,7 +26,8 @@ jobs:
           set -euo pipefail
           mkdir files
           curl --fail --silent --show-error --location --retry 3 -o files/known.zip https://github.com/TechUnRestricted/WinDiskWriter/releases/download/v1.0.0/WinDiskWriter.1.0.zip
-          test "$(shasum -a 256 files/known.zip 2>/dev/null | cut -c1-64 || sha256sum files/known.zip | cut -c1-64)" = 582b5e4c7506c5014cb656a600df48012b2fca1f6e9c7f3c0933dea6fa463d84
+          if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum files/known.zip | cut -c1-64); else got=$(shasum -a 256 files/known.zip | cut -c1-64); fi
+          test "$got" = 582b5e4c7506c5014cb656a600df48012b2fca1f6e9c7f3c0933dea6fa463d84
           printf 'not a real build %s %s\n' "$GITHUB_RUN_ID" "$RANDOM" > files/unknown.txt
 
       - name: Run the action
