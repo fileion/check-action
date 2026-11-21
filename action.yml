@@ -1,0 +1,128 @@
+name: Fileion check
+description: Check build files against the Fileion catalogue (only SHA-256 hashes are sent).
+author: Fileion.Com
+branding:
+  icon: search
+  color: blue
+
+inputs:
+  files:
+    description: One glob per line (or a single glob), relative to the workspace, for example dist/*.exe.
+    required: true
+  fail-on:
+    description: "never (default): the step fails only on a usage, network or API error. unknown: it also fails when a file is not listed."
+    required: false
+    default: never
+  api-key:
+    description: Optional free Fileion API key. Sent only as the FILEION_API_KEY environment variable and masked in logs.
+    required: false
+    default: ""
+
+outputs:
+  listed:
+    description: Number of files Fileion lists.
+    value: ${{ steps.run.outputs.listed }}
+  not-listed:
+    description: Number of files Fileion has no record of.
+    value: ${{ steps.run.outputs.not-listed }}
+  results-file:
+    description: Path of the CLI's JSON output.
+    value: ${{ steps.run.outputs.results-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Mask the API key
+      shell: bash
+      env:
+        KEY: ${{ inputs.api-key }}
+      run: |
+        if [ -n "$KEY" ]; then echo "::add-mask::$KEY"; fi
+
+    - name: Get the Fileion CLI (pinned, checked against its v0.1.0 SHA-256)
+      id: cli
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=v0.1.0
+        case "$RUNNER_OS" in Linux) os=linux ext="";; macOS) os=darwin ext="";; Windows) os=windows ext=".exe";; *) echo "::error::Unsupported runner OS: $RUNNER_OS"; exit 1;; esac
+        case "$RUNNER_ARCH" in X64) arch=amd64;; ARM64) arch=arm64;; *) echo "::error::Unsupported runner architecture: $RUNNER_ARCH"; exit 1;; esac
+        asset="fileion-$os-$arch$ext"
+        dir="$RUNNER_TEMP/fileion-cli"
+        mkdir -p "$dir"
+        base="https://github.com/fileion/fileion-cli/releases/download/$version"
+        # SHA-256 of each v0.1.0 asset, copied from that release's SHA256SUMS. Embedding them means a replaced release asset (or SHA256SUMS) is caught.
+        case "$asset" in
+          fileion-darwin-amd64) want=1a0ea7545cfae7a250cbbe10b4928460dd19e7537fb11fa383becbd193afb243;;
+          fileion-darwin-arm64) want=ea343aa2215817892a35386c1f65b3c6467aca7f98502276b9d8c8c91b071b62;;
+          fileion-linux-amd64) want=1e96e7a6a9f5b4e46a61bf306f897a54aa7dec218e5a92389a8e2e328b68f573;;
+          fileion-linux-arm64) want=789b103ea7e8e1cc210d59c3cc58d4fb9d9eb595803a1cc6337a3a0f0115d6c2;;
+          fileion-windows-amd64.exe) want=d273123f85f874902b7e64ed8089ee2ee4fbdc70f947432402da551ecbd2698c;;
+          fileion-windows-arm64.exe) want=f82043e12ed79e6ccc5f0f4f3d17cb8a72d75c98e17ddd6e6e06afb24a8363e3;;
+          *) echo "::error::No checksum for $asset"; exit 1;;
+        esac
+        curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --output "$dir/$asset" "$base/$asset"
+        # hash from inside the folder: sha256sum prefixes the line with a backslash when the path has one (Windows temp paths)
+        if command -v sha256sum >/dev/null 2>&1; then got=$(cd "$dir" && sha256sum "$asset" | awk '{print $1}'); else got=$(cd "$dir" && shasum -a 256 "$asset" | awk '{print $1}'); fi
+        if [ "$got" != "$want" ]; then echo "::error::SHA-256 of $asset does not match the v0.1.0 checksum; not running it."; exit 1; fi
+        chmod +x "$dir/$asset"
+        echo "path=$dir/$asset" >> "$GITHUB_OUTPUT"
+
+    - name: Check the files
+      id: run
+      shell: bash
+      env:
+        FILES: ${{ inputs.files }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        FILEION_API_KEY: ${{ inputs.api-key }}
+        CLI: ${{ steps.cli.outputs.path }}
+      run: |
+        set -uo pipefail
+        case "$FAIL_ON" in never|unknown) ;; *) echo "::error::fail-on must be never or unknown"; exit 2;; esac
+        shopt -s globstar 2>/dev/null || true # macOS bash 3.2 has no globstar: ** then acts like *
+        shopt -s nullglob
+        files=()
+        # One pattern per line. The glob is expanded in the inner loop, so a pattern that matches nothing is still seen here and fails the step.
+        while IFS= read -r pattern; do
+          pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+          [ -z "$pattern" ] && continue
+          case "$pattern" in /*|*..*|?:*) echo "::error::files must be inside the workspace (no absolute paths or ..): $pattern"; exit 2;; esac
+          matched=0
+          IFS=$'\n'
+          for f in $pattern; do
+            if [ -f "$f" ]; then
+              case "$f" in -*) f="./$f";; esac # the CLI would read a leading - as a flag
+              files+=("$f"); matched=1
+            fi
+          done
+          unset IFS
+          if [ "$matched" = 0 ]; then echo "::error::No file matches: $pattern"; exit 2; fi
+        done <<< "$FILES"
+        if [ "${#files[@]}" = 0 ]; then echo "::error::No files to check"; exit 2; fi
+        out="$RUNNER_TEMP/fileion-results.json"
+        "$CLI" check --json --allow-unknown "${files[@]}" > "$out" 2> "$RUNNER_TEMP/fileion-stderr.txt"
+        code=$?
+        cat "$RUNNER_TEMP/fileion-stderr.txt" >&2
+        echo "results-file=$out" >> "$GITHUB_OUTPUT"
+        if [ "$code" -ne 0 ]; then
+          echo "::error::fileion check exited $code (2 usage, 3 network or API, 4 rate limited). See the log."
+          exit "$code"
+        fi
+        listed=$(jq '[.[] | select(.found == true)] | length' "$out")
+        notlisted=$(jq '[.[] | select(.found == false)] | length' "$out")
+        echo "listed=$listed" >> "$GITHUB_OUTPUT"
+        echo "not-listed=$notlisted" >> "$GITHUB_OUTPUT"
+        action_dir=$(cygpath -u "$GITHUB_ACTION_PATH" 2>/dev/null || echo "$GITHUB_ACTION_PATH")
+        {
+          echo "## Fileion check"
+          echo
+          echo "| File | Listed | Software | Version | Source |"
+          echo "|---|---|---|---|---|"
+          jq -r -f "$action_dir/summary.jq" "$out"
+          echo
+          echo "Not listed means Fileion has no record of that file. It is not a warning. Only SHA-256 hashes were sent."
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$FAIL_ON" = unknown ] && [ "$notlisted" -gt 0 ]; then
+          echo "::error::$notlisted file(s) not listed by Fileion (fail-on: unknown)."
+          exit 1
+        fi
