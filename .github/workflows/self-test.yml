@@ -58,3 +58,21 @@ jobs:
         env:
           OUTCOME: ${{ steps.strict.outcome }}
         run: test "$OUTCOME" = failure
+
+      - name: A pattern that matches nothing fails, even next to one that matches
+        id: missing
+        continue-on-error: true
+        uses: ./
+        with:
+          files: |
+            files/*.zip
+            files/*.nomatch
+
+      - name: That step really failed and checked nothing
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.missing.outcome }}
+          LISTED: ${{ steps.missing.outputs.listed }}
+        run: |
+          test "$OUTCOME" = failure
+          test -z "$LISTED"

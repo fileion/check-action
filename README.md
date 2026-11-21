@@ -50,7 +50,7 @@ Your files never leave the runner. The CLI hashes each file there and sends only
 
 ## Unsigned CLI, verified against SHA256SUMS
 
-The Fileion CLI is not code-signed yet. The action downloads the CLI binary for the runner from the pinned [v0.1.0 release](https://github.com/fileion/fileion-cli/releases/tag/v0.1.0), compares its SHA-256 with that release's `SHA256SUMS`, and stops the job if they differ. It runs no other downloaded code. The action uses no other actions, so there is nothing else to pin.
+The Fileion CLI is not code-signed yet. The action downloads the CLI binary for the runner from the pinned [v0.1.0 release](https://github.com/fileion/fileion-cli/releases/tag/v0.1.0) over HTTPS and compares its SHA-256 with the value for that file written in `action.yml`, copied from that release's `SHA256SUMS`. It stops the job if they differ, so a replaced release file is caught too. It runs no other downloaded code and uses no other actions.
 
 ## Licence
 
