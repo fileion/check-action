@@ -5,7 +5,7 @@ A GitHub Action that checks your build files against the [Fileion](https://filei
 ## Usage
 
 ```yaml
-- uses: fileion/check-action@main # pin to a release tag or a commit SHA once one exists
+- uses: fileion/check-action@v0.1.0 # or pin a commit SHA
   with:
     files: dist/*.exe
 ```
@@ -13,7 +13,7 @@ A GitHub Action that checks your build files against the [Fileion](https://filei
 Several patterns, one per line:
 
 ```yaml
-- uses: fileion/check-action@main
+- uses: fileion/check-action@v0.1.0
   with:
     files: |
       dist/*.exe
