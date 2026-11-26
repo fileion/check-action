@@ -12,8 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS bills 10x, so it is left out. For a release, add macos-latest back to this list for one run, then remove it.
-        os: [ubuntu-latest, windows-latest]
+        # Ubuntu only: Windows and macOS runners bill 2x and 10x. Do not add them; check Windows on the VM (ssh fileion-winvm) by hand before a release.
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

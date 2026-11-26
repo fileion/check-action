@@ -55,3 +55,7 @@ The Fileion CLI is not code-signed yet. The action downloads the CLI binary for 
 ## Licence
 
 MIT, see [LICENSE](LICENSE). Provided as is. The CLI is MIT too.
+
+## Development
+
+Do not add Windows or macOS runners; Windows tests run on the VM. The self-test workflow is Ubuntu only and runs by hand (`gh workflow run Self-test`).
