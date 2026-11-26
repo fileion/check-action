@@ -1,8 +1,7 @@
 name: Self-test
 
+# By hand only (free minutes are limited). Run it before a release: gh workflow run Self-test
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,7 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # macOS bills 10x, so it is left out. For a release, add macos-latest back to this list for one run, then remove it.
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
